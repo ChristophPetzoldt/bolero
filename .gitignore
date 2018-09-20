@@ -6,6 +6,7 @@ bolero/wrapper/_wrapper.cpp
 # Temporary test files
 .coverage
 coverageReport
+.idea
 
 # Binaries
 *.pyc
