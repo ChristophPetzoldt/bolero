@@ -16,6 +16,7 @@
 #include <cstring> // for memcpy
 #include <cstdio>
 #include <cmath>
+#include <sys/time.h>     // get time elapsed
 
 using namespace configmaps;
 
@@ -55,15 +56,19 @@ namespace bolero {
     void PSOOptimizer::init(int dimension, std::string config) {
       assert(dimension > 0);
 
+      if(wasInit) {
+        deinit();
+      }
       long seed = 0;
       char *seedChar = getenv("BL_SEED");
       if(seedChar) {
         sscanf(seedChar, "%ld", &seed);
-        srand(seed);
       }
       if(seed == 0) {
-        seed = time(NULL);
-        srand(seed);
+        timeval t;
+        gettimeofday(&t, NULL);
+        long ms = t.tv_sec * 1000 + t.tv_usec / 1000;
+        seed = ms+getpid()*1000;
       }
       std::string seedFilename = ".";
       char *logPath = getenv("BL_LOG_PATH");
@@ -73,10 +78,9 @@ namespace bolero {
       seedFilename += "/seed.txt";
       FILE *seedFile = fopen(seedFilename.c_str(), "w");
       if(seedFile) {
-        fprintf(seedFile, "seed: %ld\n", seed);
         fclose(seedFile);
       }
-
+      srand(seed);
       this->dimension = dimension;
       particleCount = 4+(int)(3*log((double)dimension));
 
@@ -110,6 +114,17 @@ namespace bolero {
       wasInit = true;
     }
 
+    void PSOOptimizer::deinit() {
+      if(wasInit) {
+        for(int i = 0; i < particleCount; ++i) {
+          delete particles[i];
+        }
+        delete[] particles;
+        delete[] gMin;
+        wasInit = false;
+      }
+    }
+
     PSOOptimizer::~PSOOptimizer() {
       if(wasInit) {
         char *logDir = getenv("BL_LOG_PATH");
@@ -118,20 +133,13 @@ namespace bolero {
           file += "/pso_best_params.dat";
           FILE *resFile = fopen(file.c_str(), "w");
           if(resFile) {
-            fprintf(resFile, "Generation %3d's best fitness: %12.6f\n",
-                    generation, gMinCost);
-            fprintf(resFile, "parameters:\n");
             for(int i=0;i<dimension;++i) {
               fprintf(resFile, "%g, ", gMin[i]);
             }
             fclose(resFile);
           }
         }
-        for(int i = 0; i < particleCount; ++i) {
-          delete particles[i];
-        }
-        delete[] particles;
-        delete[] gMin;
+        deinit();
       }
     }
 
@@ -171,13 +179,6 @@ namespace bolero {
         updateParticles();
         individual = 0;
         generation++;
-        fprintf(stdout, "Generation %3d's best fitness: %12.6f\n",
-                generation, gMinCost);
-        fprintf(stdout, "parameters: ");
-        for(int i = 0; i < dimension; ++i) {
-          fprintf(stdout, "%g, ", gMin[i]);
-        }
-        fprintf(stdout, "\n");
       }
     }
 
